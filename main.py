@@ -25,82 +25,88 @@ class CodeRequest(BaseModel):
     code: str
 
 
-class ErrorAnalysis(BaseModel):
-    error_lines: List[int]
+
 
 
 def execute_python_code(code: str) -> dict:
+    """
+    Execute Python code and return exact output.
+
+    Returns:
+        {
+            "success": bool,
+            "output": str  # Exact stdout or traceback
+        }
+    """
+    import sys
+    from io import StringIO
+    import traceback
+
+    # Capture stdout
     old_stdout = sys.stdout
-    old_stderr = sys.stderr
-
-    stdout = StringIO()
-    stderr = StringIO()
-
-    sys.stdout = stdout
-    sys.stderr = stderr
+    sys.stdout = StringIO()
 
     try:
-        exec(code, {})
+        # Execute code
+        exec(code)
+        output = sys.stdout.getvalue()
+        return {"success": True, "output": output}
 
-        output = stdout.getvalue() + stderr.getvalue()
-
-        return {
-            "success": True,
-            "output": output
-        }
-
-    except Exception:
+    except Exception as e:
+        # Get full traceback
         output = traceback.format_exc()
-
-        return {
-            "success": False,
-            "output": output
-        }
+        return {"success": False, "output": output}
 
     finally:
         sys.stdout = old_stdout
-        sys.stderr = old_stderr
 
 
-def analyze_error_with_ai(code: str, error: str) -> List[int]:
+from pydantic import BaseModel
+from google import genai
+from google.genai import types
 
-    client = OpenAI(
-        api_key=os.environ["AIPIPE_TOKEN"],
-        base_url="https://aipipe.org/openai/v1"
-    )
+class ErrorAnalysis(BaseModel):
+    error_lines: List[int]  # Line numbers with errors
+
+def analyze_error_with_ai(code: str, traceback: str) -> List[int]:
+    """
+    Use LLM with structured output to identify error line numbers.
+    """
+    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
     prompt = f"""
-You are a Python traceback analyzer.
+Analyze this Python code and its error traceback.
+Identify the line number(s) where the error occurred.
 
-Python code:
+CODE:
 {code}
 
-Traceback:
-{error}
+TRACEBACK:
+{traceback}
 
-Find the line number in the user's Python code where the error occurred.
-
-Return ONLY a JSON array of integers.
-Example:
-[2]
-
-Do not return any explanation or markdown.
+Return the line number(s) where the error is located.
 """
 
-    response = client.chat.completions.create(
-        model="openai/gpt-4.1-nano",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
+    response = client.models.generate_content(
+        model='gemini-2.0-flash-exp',
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "error_lines": types.Schema(
+                        type=types.Type.ARRAY,
+                        items=types.Schema(type=types.Type.INTEGER)
+                    )
+                },
+                required=["error_lines"]
+            )
+        )
     )
 
-    text = response.choices[0].message.content.strip()
-
-    # Parse JSON returned by the model
-    return [int(x) for x in json.loads(text)]
+    result = ErrorAnalysis.model_validate_json(response.text)
+    return result.error_lines
 @app.post("/code-interpreter")
 def code_interpreter(request: CodeRequest):
 
