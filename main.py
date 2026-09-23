@@ -63,24 +63,28 @@ def execute_python_code(code: str) -> dict:
 
 
 def analyze_error_with_ai(code: str, error: str) -> List[int]:
+
     client = OpenAI(
         api_key=os.environ["AIPIPE_TOKEN"],
-        base_url="https://aipipe.org/openrouter/v1"
+        base_url="https://aipipe.org/openai/v1"
     )
 
     prompt = f"""
-Analyze this Python code and traceback.
+You are a Python traceback analyzer.
 
-CODE:
+Python code:
 {code}
 
-TRACEBACK:
+Traceback:
 {error}
 
-Identify the exact line number where the Python error occurred.
+Find the line number in the user's Python code where the error occurred.
 
-Return ONLY a JSON object in this exact format:
-{{"error_lines": [2]}}
+Return ONLY a JSON array of integers.
+Example:
+[2]
+
+Do not return any explanation or markdown.
 """
 
     response = client.chat.completions.create(
@@ -93,18 +97,10 @@ Return ONLY a JSON object in this exact format:
         ]
     )
 
-    import json
-
     text = response.choices[0].message.content.strip()
 
-    # Remove markdown code fences if the model adds them
-    if text.startswith("```"):
-        text = text.replace("```json", "").replace("```", "").strip()
-
-    result = json.loads(text)
-
-    return [int(x) for x in result["error_lines"]]
-
+    # Parse JSON returned by the model
+    return [int(x) for x in json.loads(text)]
 @app.post("/code-interpreter")
 def code_interpreter(request: CodeRequest):
 
