@@ -70,10 +70,7 @@ def analyze_error_with_ai(code: str, error: str) -> List[int]:
     )
 
     prompt = f"""
-Analyze this Python code and traceback.
-
-Identify the exact source-code line number where
-the error occurred.
+Analyze the following Python code and traceback.
 
 CODE:
 {code}
@@ -81,7 +78,10 @@ CODE:
 TRACEBACK:
 {error}
 
-Return the error line number(s).
+Identify the exact source-code line number where the error occurred.
+
+Return ONLY valid JSON in this exact format:
+{{"error_lines": [3]}}
 """
 
     response = client.chat.completions.create(
@@ -89,40 +89,22 @@ Return the error line number(s).
         messages=[
             {
                 "role": "system",
-                "content": "Identify Python error line numbers accurately."
+                "content": "You identify Python error line numbers."
             },
             {
                 "role": "user",
                 "content": prompt
             }
-        ],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "error_analysis",
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "error_lines": {
-                            "type": "array",
-                            "items": {
-                                "type": "integer"
-                            }
-                        }
-                    },
-                    "required": ["error_lines"],
-                    "additionalProperties": False
-                }
-            }
-        }
+        ]
     )
 
-    result = ErrorAnalysis.model_validate_json(
-        response.choices[0].message.content
-    )
+    import json
 
-    return result.error_lines
+    content = response.choices[0].message.content.strip()
 
+    result = json.loads(content)
+
+    return result["error_lines"]
 
 @app.post("/code-interpreter")
 def code_interpreter(request: CodeRequest):
