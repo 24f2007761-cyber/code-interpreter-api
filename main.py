@@ -106,24 +106,30 @@ def code_interpreter(request: CodeRequest):
 
     execution = execute_python_code(request.code)
 
-    # No error
     if execution["success"]:
         return {
             "error": [],
             "result": execution["output"]
         }
 
-    # Error occurred -> ask AI
-    error_lines = analyze_error_with_ai(
-        request.code,
-        execution["output"]
-    )
+    try:
+        error_lines = analyze_error_with_ai(
+            request.code,
+            execution["output"]
+        )
 
-    return {
-        "error": error_lines,
-        "result": execution["output"]
-    }
+        return {
+            "error": error_lines,
+            "result": execution["output"]
+        }
 
+    except Exception as e:
+        print("AI ERROR:", repr(e))
+
+        return {
+            "error": ["AI analysis failed"],
+            "result": execution["output"]
+        }
 
 # Root endpoint
 @app.get("/")
