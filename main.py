@@ -107,32 +107,19 @@ Return ONLY a JSON object in this exact format:
 
 @app.post("/code-interpreter")
 def code_interpreter(request: CodeRequest):
-    try:
-        execution = execute_python_code(request.code)
 
-        if execution["success"]:
-            return {
-                "error": [],
-                "result": execution["output"]
-            }
+    execution = execute_python_code(request.code)
 
-        error_lines = analyze_error_with_ai(
-            request.code,
-            execution["output"]
-        )
-
+    if execution["success"]:
         return {
-            "error": error_lines,
+            "error": [],
             "result": execution["output"]
         }
 
-    except Exception as e:
-        print("ERROR:", repr(e), flush=True)
-        traceback.print_exc()
-        return {
-            "error": ["AI analysis failed"],
-            "result": str(e)
-        }
+    error_lines = analyze_error_with_ai(
+        request.code,
+        execution["output"]
+    )
 
     return {
         "error": error_lines,
