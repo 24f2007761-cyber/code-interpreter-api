@@ -59,12 +59,13 @@ def execute_python_code(code: str) -> dict:
 # AI error analysis
 def analyze_error_with_ai(code: str, traceback_text: str) -> List[int]:
 
-    client = OpenAI(
-        api_key=os.environ["AIPIPE_TOKEN"],
-        base_url="https://aipipe.org/openai/v1"
-    )
+    try:
+        client = OpenAI(
+            api_key=os.environ["AIPIPE_TOKEN"],
+            base_url="https://aipipe.org/openai/v1"
+        )
 
-    prompt = f"""
+        prompt = f"""
 Analyze this Python code and traceback.
 
 CODE:
@@ -77,28 +78,35 @@ Identify the exact line number(s) where the error occurred.
 
 Return ONLY a JSON array of integers.
 Example:
-[2]
+[3]
 """
 
-    response = client.chat.completions.create(
-        model="google/gemini-2.0-flash-lite-001",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-    )
+        response = client.chat.completions.create(
+            model="google/gemini-2.0-flash-lite-001",
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        )
 
-    text = response.choices[0].message.content.strip()
+        text = response.choices[0].message.content.strip()
 
-    if text.startswith("```"):
-        text = text.replace("```json", "")
-        text = text.replace("```", "")
-        text = text.strip()
+        print("AI RESPONSE:", text)
 
-    return [int(x) for x in json.loads(text)]
+        if text.startswith("```"):
+            text = text.replace("```json", "")
+            text = text.replace("```", "")
+            text = text.strip()
 
+        result = json.loads(text)
+
+        return [int(x) for x in result]
+
+    except Exception as e:
+        print("AI ERROR:", repr(e))
+        raise
 
 # Main API endpoint
 @app.post("/code-interpreter")
@@ -112,25 +120,15 @@ def code_interpreter(request: CodeRequest):
             "result": execution["output"]
         }
 
-    try:
-        error_lines = analyze_error_with_ai(
-            request.code,
-            execution["output"]
-        )
+    error_lines = analyze_error_with_ai(
+        request.code,
+        execution["output"]
+    )
 
-        return {
-            "error": error_lines,
-            "result": execution["output"]
-        }
-
-    except Exception as e:
-        print("AI ERROR:", repr(e))
-
-        return {
-            "error": ["AI analysis failed"],
-            "result": execution["output"]
-        }
-
+    return {
+        "error": error_lines,
+        "result": execution["output"]
+    }
 # Root endpoint
 @app.get("/")
 def root():
