@@ -81,7 +81,7 @@ Example:
 """
 
     response = client.chat.completions.create(
-        model="openai/gpt-4.1-nano",
+        model="google/gemini-2.0-flash-lite-001",
         messages=[
             {
                 "role": "user",
